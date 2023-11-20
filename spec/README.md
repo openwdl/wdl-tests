@@ -1,0 +1,1 @@
+This folder contains tests automatically generated from the WDL specifications.

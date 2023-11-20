@@ -1,0 +1,2 @@
+spec/**/*.wdl
+spec/**/test_config.json
