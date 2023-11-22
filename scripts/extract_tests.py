@@ -159,7 +159,7 @@ def main():
         help="WDL version of extracted test files",
     )
     args = parser.parse_args()
-    extract_tests(args.spec, args.data_dir, args.output_dir, args.version)
+    extract_tests(args.input_file, args.data_dir, args.output_dir, args.version)
 
 
 if __name__ == "__main__":
