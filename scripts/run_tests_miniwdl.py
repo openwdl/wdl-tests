@@ -74,18 +74,31 @@ def run_test(
         return Result.IGNORE
 
     input_json = json.dumps(config["input"])
-    command = [miniwdl_path, "run", "-p", test_dir, "-i", input_json]
+    
+    # Ensure "run" command is included
+    command = [str(miniwdl_path), "run", "-p", str(test_dir), "-i", input_json]
+
     if output_dir is not None:
         command.extend(["-d", str(output_dir)])
+
     if config["type"] == "task":
         command.extend(["--task", str(config["target"])])
-    command.append(str(config["path"]))
-    p = subby.cmd(command, shell=True, cwd=data_dir)
-    output = json.loads(p.output)
 
+    command.append(str(config["path"]))
+
+    # Debugging: Print command before execution
+    print("Executing command:", " ".join(command))
+
+    # Run the command using subby
+    p = subby.cmd(command, shell=True, raise_on_error=False)
+
+    # Check if the process failed (return code 2 should be handled)
     fail = False
     if p.returncode == 0:
         fail = config["fail"]
+    elif p.returncode == 2:
+        print(f"ERROR: miniwdl returned exit code 2\n{p.output or p.error}")
+        return Result.FAIL  # Capture failure when exit code 2 occurs
     elif config["fail"]:
         if config["return_code"] == "*":
             pass
@@ -99,6 +112,12 @@ def run_test(
         fail = True
 
     invalid = []
+    try:
+        output = json.loads(p.output)
+    except json.JSONDecodeError:
+        print(f"ERROR: Invalid JSON output from miniwdl:\n{p.output or p.error}")
+        return Result.FAIL
+
     if not fail:
         for key, value in output.items():
             if key not in config["exclude_output"]:
@@ -115,9 +134,9 @@ def run_test(
         title = f"{config['path']}: {'WARNING' if warn else 'ERROR'}"
         print(title)
         print("-" * len(title))
-        print(f"Return code:")
+        print(f"Return code: {p.returncode}")
         if fail:
-            print(json.dumps(output))
+            print(json.dumps(output, indent=2))
         else:
             print("Invalid output(s):")
             for key, expected, actual in invalid:
@@ -125,12 +144,11 @@ def run_test(
 
         if warn:
             return Result.WARN
-        elif fail:
-            return Result.FAIL
         else:
-            return Result.INVALID
+            return Result.FAIL
     else:
         return Result.PASS
+
 
 
 def main():
