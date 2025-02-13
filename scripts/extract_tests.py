@@ -8,7 +8,7 @@ from typing import Optional
 
 
 TEST_RE = re.compile(
-    r"^<details>\s*<summary>\s*Example: (.+?)\s*```wdl(.+?)```\s*</summary>\s*(?:<p>\s*(?:Example input:\s*```json(.*?)```)?\s*(?:Example output:\s*```json(.*?)```)?\s*(?:Test config:\s*```json(.*)```)?\s*</p>\s*)?</details>$",
+    r"^<details>\s*<summary>\s*Example: (.+?)\s*```wdl(.+?)```\s*</summary>\s*(?:<p>\s*(?:Example input:\s*```json(.*?)```)?\s*(?:Example output:\s*```json(.*?)```)?\s*(?:Test config:\s*```json(.*?)```)?\s*</p>\s*)?</details>$",
     re.I | re.S,
 )
 FILENAME_RE = re.compile(r"(.+?)(_fail)?(_task)?.wdl")
@@ -27,9 +27,10 @@ def write_test_files(m: re.Match, output_dir: Path, version: str, config: list):
 
     wdl = wdl.strip()
     v = VERSION_RE.search(wdl)
+
     if v is None:
         raise Exception("WDL does not contain version statement")
-    elif v.group(1) != version:
+    elif str(v.group(1)) != str(version):
         raise Exception(f"Invalid WDL version {wdl}")
 
     wdl_file = output_dir / file_name
