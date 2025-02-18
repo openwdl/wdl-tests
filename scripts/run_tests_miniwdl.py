@@ -119,7 +119,8 @@ def run_test(
         return Result.FAIL
 
     if not fail:
-        for key, value in output.items():
+        outputs = output['outputs']
+        for key, value in outputs.items():
             if key not in config["exclude_output"]:
                 if key not in config["output"]:
                     invalid.append((key, value, None))
