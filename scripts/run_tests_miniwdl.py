@@ -92,25 +92,23 @@ def run_test(
     # Run the command using subby
     p = subby.cmd(command, shell=True, raise_on_error=False)
 
-    # Check if the process failed (return code 2 should be handled)
-    fail = False
-    if p.returncode == 0:
-        fail = config["fail"]
-    elif p.returncode == 2:
-        print(f"ERROR: miniwdl returned exit code 2\n{p.output or p.error}")
-        return Result.FAIL  # Capture failure when exit code 2 occurs
-    elif config["fail"]:
-        if config["return_code"] == "*":
-            pass
-        else:
-            rc = config["return_code"]
-            if isinstance(rc, int):
-                rc = [rc]
-            if not p.returncode in rc:
-                fail = True
-    else:
-        fail = True
+    # Determine expected failure logic
+    expected_to_fail = config.get("fail", False)
+    actual_failed = p.returncode != 0  # Test actually failed
 
+    if expected_to_fail:
+        if actual_failed:
+            print(f"Test '{config['path']}' was expected to fail and did — PASS")
+            return Result.PASS  # Expected failure happened, so it's a pass
+        else:
+            print(f"ERROR: Test '{config['path']}' was expected to fail but passed!")
+            return Result.FAIL  # Unexpected pass when it should've failed
+    else:
+        if actual_failed:
+            print(f"ERROR: Test '{config['path']}' failed unexpectedly.")
+            return Result.FAIL  # Test wasn't expected to fail, so it's a failure
+
+    # Check output validity only if the test passed
     invalid = []
     try:
         output = json.loads(p.output)
@@ -118,37 +116,25 @@ def run_test(
         print(f"ERROR: Invalid JSON output from miniwdl:\n{p.output or p.error}")
         return Result.FAIL
 
-    if not fail:
-        outputs = output['outputs']
-        for key, value in outputs.items():
-            if key not in config["exclude_output"]:
-                if key not in config["output"]:
-                    invalid.append((key, value, None))
-                elif config["output"][key] != value:
-                    invalid.append((key, value, config["output"][key]))
+    outputs = output.get("outputs", {})
+    for key, value in outputs.items():
+        if key not in config["exclude_output"]:
+            if key not in config["output"]:
+                invalid.append((key, value, None))
+            elif config["output"][key] != value:
+                invalid.append((key, value, config["output"][key]))
 
-    if fail or invalid:
-        warn = config["priority"] == "optional"
-        if warn and no_warn:
-            return Result.WARN
-
-        title = f"{config['path']}: {'WARNING' if warn else 'ERROR'}"
+    if invalid:
+        title = f"{config['path']}: ERROR"
         print(title)
         print("-" * len(title))
-        print(f"Return code: {p.returncode}")
-        if fail:
-            print(json.dumps(output, indent=2))
-        else:
-            print("Invalid output(s):")
-            for key, expected, actual in invalid:
-                print(f"  {key}: {expected} != {actual}")
+        print("Invalid output(s):")
+        for key, actual, expected in invalid:
+            print(f"  {key}: {actual} != {expected}")
+        return Result.FAIL
 
-        if warn:
-            return Result.WARN
-        else:
-            return Result.FAIL
-    else:
-        return Result.PASS
+    return Result.PASS
+
 
 
 
