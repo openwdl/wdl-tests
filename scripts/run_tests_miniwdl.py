@@ -175,6 +175,7 @@ def main():
     if args.num_tests is not None:
         configs = configs[: args.num_tests]
     results = defaultdict(int)
+    failed_tests = []  # Store failed test paths
     for config in configs:
         if args.check_only:
             result = check(
@@ -197,6 +198,17 @@ def main():
                 args.deprecated_optional,
             )
             results[result] += 1
+            if result == Result.FAIL:
+                failed_tests.append(config["path"])  # Store failing test path
+
+    # Save failed tests to a file
+    if failed_tests:
+        failed_tests_file = test_dir / "failed_tests.txt"
+        with open(failed_tests_file, "w") as f:
+            for test in failed_tests:
+                f.write(f"{test}\n")
+
+        print(f"\nFailed tests written to: {failed_tests_file}")
 
     print(f"Total tests: {sum(results.values())}")
     print(f"Passed: {results.get(Result.PASS, 0)}")
