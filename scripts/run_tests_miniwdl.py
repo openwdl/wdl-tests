@@ -128,8 +128,11 @@ def run_test(
         if key not in config["exclude_output"]:
             if key not in config["output"]:
                 invalid.append((key, value, None))
-            elif config["output"][key] != value:
-                invalid.append((key, value, config["output"][key]))
+            else:
+                expected_value = config["output"][key]
+                # Ensure both paths are normalized before comparison
+                if os.path.normpath(value) != os.path.normpath(expected_value):
+                    invalid.append((key, value, expected_value))
 
     if invalid:
         title = f"{config['path']}: ERROR"
