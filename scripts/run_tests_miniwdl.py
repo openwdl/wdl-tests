@@ -95,7 +95,9 @@ def run_test(
     # Determine expected failure logic
     expected_to_fail = config.get("fail", False)
     actual_failed = p.returncode != 0  # Test actually failed
-
+    rc = p.returncode
+    expected_rc = config["return_code"]
+    
     if expected_to_fail:
         if actual_failed:
             print(f"Test '{config['path']}' was expected to fail and did — PASS")
@@ -104,7 +106,12 @@ def run_test(
             print(f"ERROR: Test '{config['path']}' was expected to fail but passed!")
             return Result.FAIL  # Unexpected pass when it should've failed
     else:
-        if actual_failed:
+        if rc ==  "*":
+            pass
+        elif rc != expected:
+            print(f"ERROR: Test '{config['path']}' failed with different return code.")
+            return Result.FAIL  # Test wasn't expected to fail, so it's a failure
+        elif actual_failed:
             print(f"ERROR: Test '{config['path']}' failed unexpectedly.")
             return Result.FAIL  # Test wasn't expected to fail, so it's a failure
 
