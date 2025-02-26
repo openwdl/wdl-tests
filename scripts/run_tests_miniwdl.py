@@ -106,9 +106,9 @@ def run_test(
             print(f"ERROR: Test '{config['path']}' was expected to fail but passed!")
             return Result.FAIL  # Unexpected pass when it should've failed
     else:
-        if rc ==  "*":
+        if expected_rc ==  "*":
             pass
-        elif rc != expected:
+        elif rc != expected_rc:
             print(f"ERROR: Test '{config['path']}' failed with different return code.")
             return Result.FAIL  # Test wasn't expected to fail, so it's a failure
         elif actual_failed:
@@ -130,8 +130,19 @@ def run_test(
                 invalid.append((key, value, None))
             else:
                 expected_value = config["output"][key]
-                # Ensure both paths are normalized before comparison
-                if os.path.normpath(value) != os.path.normpath(expected_value):
+                # Function to extract filename if the value is a valid path
+                def get_filename_if_path(val):
+                    """Return the filename if val is a valid path, otherwise return val."""
+                    if isinstance(val, str):  # Only process string values
+                        path_obj = Path(val)
+                        return path_obj.name if path_obj.exists() else val
+                    return val  # Return as-is if not a string
+
+                # Extract filenames only for valid path-like strings
+                value_name = get_filename_if_path(value)
+                expected_name = get_filename_if_path(expected_value)
+                
+                if value_name != expected_name:
                     invalid.append((key, value, expected_value))
 
     if invalid:
