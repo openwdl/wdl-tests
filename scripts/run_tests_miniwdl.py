@@ -96,9 +96,7 @@ def run_test(
     expected_to_fail = config.get("fail", False)
     actual_failed = p.returncode != 0  # Test actually failed
     rc = p.returncode
-    print(rc)
     expected_rc = config["returnCodes"]
-    print(expected_rc)
     
     if expected_to_fail:
         if actual_failed:
