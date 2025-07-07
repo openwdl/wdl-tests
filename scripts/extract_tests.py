@@ -58,10 +58,10 @@ def write_test_files(m: re.Match, output_dir: Path, version: str, config: list):
         config_entry["exclude_output"] = []
     elif isinstance(config_entry["exclude_output"], str):
         config_entry["exclude_output"] = [config_entry["exclude_output"]]
-    if "return_code" not in config_entry:
-        config_entry["return_code"] = "*"
-    elif isinstance(config_entry["return_code"], str):
-        config_entry["return_code"] = [config_entry["return_code"]]
+    if "returnCodes" not in config_entry:
+        config_entry["returnCodes"] = "*"
+    elif isinstance(config_entry["returnCodes"], str):
+        config_entry["returnCodes"] = [config_entry["returnCodes"]]
     if "dependencies" not in config_entry:
         config_entry["dependencies"] = []
     elif isinstance(config_entry["dependencies"], str):
