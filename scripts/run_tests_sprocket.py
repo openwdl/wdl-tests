@@ -76,7 +76,7 @@ def run_test(
     with open(input_path, "w") as f:
         json.dump(config["input"], f)
 
-    command = [str(sprocket_patah), "run", str(Path.cwd() / config["path"]), str(input_path), "--output", str(output_dir / config['id']) ]
+    command = [str(sprocket_path), "run", str(Path.cwd() / config["path"]), str(input_path), "--output", str(output_dir / config['id']) ]
 
     if config["type"] == "task":
         command.extend(["-n", str(config["target"])])
