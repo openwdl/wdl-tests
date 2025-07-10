@@ -8,7 +8,7 @@ from typing import Optional
 
 
 TEST_RE = re.compile(
-    r"^<details>\s*<summary>\s*Example: (.+?)\s*```wdl(.+?)```\s*</summary>\s*(?:<p>\s*(?:Example input:\s*```json(.*?)```)?\s*(?:Example output:\s*```json(.*?)```)?\s*(?:Test config:\s*```json(.*)```)?\s*</p>\s*)?</details>$",
+    r"^<details>\s*<summary>\s*Example: (.+?)\s*```wdl(.+?)```\s*</summary>\s*(?:<p>\s*(?:Example input:\s*```json(.*?)```)?\s*(?:Example output:\s*```json(.*?)```)?\s*(?:Test config:\s*```json(.*?)```)?\s*</p>\s*)?</details>$",
     re.I | re.S,
 )
 FILENAME_RE = re.compile(r"(.+?)(_fail)?(_task)?.wdl")
@@ -27,9 +27,10 @@ def write_test_files(m: re.Match, output_dir: Path, version: str, config: list):
 
     wdl = wdl.strip()
     v = VERSION_RE.search(wdl)
+
     if v is None:
         raise Exception("WDL does not contain version statement")
-    elif v.group(1) != version:
+    elif str(v.group(1)) != str(version):
         raise Exception(f"Invalid WDL version {wdl}")
 
     wdl_file = output_dir / file_name
@@ -57,10 +58,10 @@ def write_test_files(m: re.Match, output_dir: Path, version: str, config: list):
         config_entry["exclude_output"] = []
     elif isinstance(config_entry["exclude_output"], str):
         config_entry["exclude_output"] = [config_entry["exclude_output"]]
-    if "return_code" not in config_entry:
-        config_entry["return_code"] = "*"
-    elif isinstance(config_entry["return_code"], str):
-        config_entry["return_code"] = [config_entry["return_code"]]
+    if "returnCodes" not in config_entry:
+        config_entry["returnCodes"] = "*"
+    elif isinstance(config_entry["returnCodes"], str):
+        config_entry["returnCodes"] = [config_entry["returnCodes"]]
     if "dependencies" not in config_entry:
         config_entry["dependencies"] = []
     elif isinstance(config_entry["dependencies"], str):
@@ -118,8 +119,10 @@ def extract_tests(spec: Path, data_dir: Optional[Path], output_dir: Path, versio
         json.dump(config, o, indent=2)
 
     if data_dir is not None and data_dir.exists():
-        output_data_dir = output_dir / "data"
-        shutil.copytree(data_dir, output_data_dir, symlinks=True, dirs_exist_ok=False)
+        dest1 = Path.cwd() / data_dir.name
+        dest2 = output_dir / data_dir.name
+        shutil.copytree(data_dir, dest1, symlinks=True, dirs_exist_ok=True)
+        shutil.copytree(data_dir, dest2, symlinks=True, dirs_exist_ok=True)
 
 
 def main():

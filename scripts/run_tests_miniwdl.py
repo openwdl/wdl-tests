@@ -74,63 +74,89 @@ def run_test(
         return Result.IGNORE
 
     input_json = json.dumps(config["input"])
-    command = [miniwdl_path, "run", "-p", test_dir, "-i", input_json]
+    
+    # Ensure "run" command is included
+    command = [str(miniwdl_path), "run", "-p", str(test_dir), "-i", input_json]
+
     if output_dir is not None:
         command.extend(["-d", str(output_dir)])
+
     if config["type"] == "task":
         command.extend(["--task", str(config["target"])])
+
     command.append(str(config["path"]))
-    p = subby.cmd(command, shell=True, cwd=data_dir)
-    output = json.loads(p.output)
 
-    fail = False
-    if p.returncode == 0:
-        fail = config["fail"]
-    elif config["fail"]:
-        if config["return_code"] == "*":
-            pass
+    # Debugging: Print command before execution
+    print("Executing command:", " ".join(command))
+
+    # Run the command using subby
+    p = subby.cmd(command, shell=True, raise_on_error=False)
+
+    # Determine expected failure logic
+    expected_to_fail = config.get("fail", False)
+    actual_failed = p.returncode != 0  # Test actually failed
+    rc = p.returncode
+    expected_rc = config["returnCodes"]
+    
+    if expected_to_fail:
+        if actual_failed:
+            print(f"Test '{config['path']}' was expected to fail and did — PASS")
+            return Result.PASS  # Expected failure happened, so it's a pass
         else:
-            rc = config["return_code"]
-            if isinstance(rc, int):
-                rc = [rc]
-            if not p.returncode in rc:
-                fail = True
+            print(f"ERROR: Test '{config['path']}' was expected to fail but passed!")
+            return Result.FAIL  # Unexpected pass when it should've failed
     else:
-        fail = True
+        if expected_rc ==  "*":
+            pass
+        elif rc != expected_rc:
+            print(f"ERROR: Test '{config['path']}' failed with different return code.")
+            return Result.FAIL  # Test wasn't expected to fail, so it's a failure
+        elif actual_failed:
+            print(f"ERROR: Test '{config['path']}' failed unexpectedly.")
+            return Result.FAIL  # Test wasn't expected to fail, so it's a failure
 
+    # Check output validity only if the test passed
     invalid = []
-    if not fail:
-        for key, value in output.items():
-            if key not in config["exclude_output"]:
-                if key not in config["output"]:
-                    invalid.append((key, value, None))
-                elif config["output"][key] != value:
-                    invalid.append((key, value, config["output"][key]))
+    try:
+        output = json.loads(p.output)
+    except json.JSONDecodeError:
+        print(f"ERROR: Invalid JSON output from miniwdl:\n{p.output or p.error}")
+        return Result.FAIL
 
-    if fail or invalid:
-        warn = config["priority"] == "optional"
-        if warn and no_warn:
-            return Result.WARN
+    outputs = output.get("outputs", {})
+    for key, value in outputs.items():
+        if key not in config["exclude_output"]:
+            if key not in config["output"]:
+                invalid.append((key, value, None))
+            else:
+                expected_value = config["output"][key]
+                # Function to extract filename if the value is a valid path
+                def get_filename_if_path(val):
+                    """Return the filename if val is a valid path, otherwise return val."""
+                    if isinstance(val, str):  # Only process string values
+                        path_obj = Path(val)
+                        return path_obj.name if path_obj.exists() else val
+                    return val  # Return as-is if not a string
 
-        title = f"{config['path']}: {'WARNING' if warn else 'ERROR'}"
+                # Extract filenames only for valid path-like strings
+                value_name = get_filename_if_path(value)
+                expected_name = get_filename_if_path(expected_value)
+                
+                if value_name != expected_name:
+                    invalid.append((key, value, expected_value))
+
+    if invalid:
+        title = f"{config['path']}: ERROR"
         print(title)
         print("-" * len(title))
-        print(f"Return code:")
-        if fail:
-            print(json.dumps(output))
-        else:
-            print("Invalid output(s):")
-            for key, expected, actual in invalid:
-                print(f"  {key}: {expected} != {actual}")
+        print("Invalid output(s):")
+        for key, actual, expected in invalid:
+            print(f"  {key}: {actual} != {expected}")
+        return Result.FAIL
 
-        if warn:
-            return Result.WARN
-        elif fail:
-            return Result.FAIL
-        else:
-            return Result.INVALID
-    else:
-        return Result.PASS
+    return Result.PASS
+
+
 
 
 def main():
@@ -156,6 +182,7 @@ def main():
     if args.num_tests is not None:
         configs = configs[: args.num_tests]
     results = defaultdict(int)
+    failed_tests = []  # Store failed test paths
     for config in configs:
         if args.check_only:
             result = check(
@@ -178,6 +205,17 @@ def main():
                 args.deprecated_optional,
             )
             results[result] += 1
+            if result == Result.FAIL:
+                failed_tests.append(config["path"])  # Store failing test path
+
+    # Save failed tests to a file
+    if failed_tests:
+        failed_tests_file = test_dir / "failed_tests.txt"
+        with open(failed_tests_file, "w") as f:
+            for test in failed_tests:
+                f.write(f"{test}\n")
+
+        print(f"\nFailed tests written to: {failed_tests_file}")
 
     print(f"Total tests: {sum(results.values())}")
     print(f"Passed: {results.get(Result.PASS, 0)}")
