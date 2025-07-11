@@ -13,6 +13,8 @@ The tests extracted from the WDL specifications are available here:
 
 See [this script](scripts/run_tests_miniwdl.py) for an example of running the tests using [MiniWDL](https://github.com/chanzuckerberg/miniwdl).
 
+See [this script](scripts/run_tests_sprocket.py) for an example of running the tests using [Sprocket](https://github.com/stjude-rust-labs/sprocket).
+
 ## Contributing Test Suites
 
 Contributions of additional test suites are greatly appreciated - especially those convering features/behaviors that are not already covered by existing test cases.
