@@ -72,7 +72,7 @@ def run_test(
     if config["priority"] == "ignore":
         return Result.IGNORE
 
-    input_path = test_dir / "inputs.json"
+    input_path = data_dir / "inputs.json"
     with open(input_path, "w") as f:
         json.dump(config["input"], f)
 
