@@ -119,7 +119,7 @@ def extract_tests(spec: Path, data_dir: Optional[Path], output_dir: Path, versio
         json.dump(config, o, indent=2)
 
     if data_dir is not None and data_dir.exists():
-        dest1 = Path.cwd() / data_dir.name
+        dest1 = Path.cwd()
         dest2 = output_dir / data_dir.name
         shutil.copytree(data_dir, dest1, symlinks=True, dirs_exist_ok=True)
         shutil.copytree(data_dir, dest2, symlinks=True, dirs_exist_ok=True)
