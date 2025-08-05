@@ -79,7 +79,7 @@ def run_test(
     command = [str(sprocket_path), "run", str(Path.cwd() / config["path"]), str(input_path), "--output", str(output_dir / config['id']) ]
 
     if config["type"] == "task":
-        command.extend(["-n", str(config["target"])])
+        command.extend(["--entrypoint", str(config["target"])])
 
     print("Executing command:", " ".join(command))
     p = subby.cmd(command, shell=True, raise_on_error=False)
