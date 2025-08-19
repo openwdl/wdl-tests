@@ -30,7 +30,14 @@ def resolve_miniwdl(path: Optional[Path]) -> Path:
     return path
 
 
-def check(config: dict, miniwdl_path: Path, test_dir: Path, strict: bool, no_warn: bool, deprecated_optional: bool) -> Result:
+def check(
+    config: dict,
+    miniwdl_path: Path,
+    test_dir: Path,
+    strict: bool,
+    no_warn: bool,
+    deprecated_optional: bool,
+) -> Result:
     command = [str(miniwdl_path), "check"]
     if strict:
         command.append("--strict")
@@ -42,7 +49,7 @@ def check(config: dict, miniwdl_path: Path, test_dir: Path, strict: bool, no_war
         return Result.IGNORE
     elif config["fail"] and no_warn:
         return Result.WARN
-    elif deprecated_optional and "deprecated" in config.get("tags", []):
+    elif deprecated_optional and "deprecated" in config["tags"]:
         return Result.WARN
     else:
         fail = config["fail"]
@@ -54,17 +61,24 @@ def check(config: dict, miniwdl_path: Path, test_dir: Path, strict: bool, no_war
         return Result.WARN if fail else Result.FAIL
 
 
-def run_test(config: dict, miniwdl_path: Path, test_dir: Path, data_dir: Path,
-             output_dir: Optional[Path], no_warn: bool, deprecated_optional: bool) -> Result:
-
+def run_test(
+    config: dict,
+    miniwdl_path: Path,
+    test_dir: Path,
+    data_dir: Path,
+    output_dir: Optional[Path],
+    no_warn: bool,
+    deprecated_optional: bool,
+) -> Result:
     if config["priority"] == "ignore":
         return Result.IGNORE
 
-    input_json = json.dumps(config.get("input", {}))
-
+    input_json = json.dumps(config["input"])
+    
+    # Ensure "run" command is included
     command = [str(miniwdl_path), "run", "-p", str(test_dir), "-i", input_json]
 
-    if output_dir:
+    if output_dir is not None:
         command.extend(["-d", str(output_dir)])
 
     if config["type"] == "task":
@@ -72,31 +86,36 @@ def run_test(config: dict, miniwdl_path: Path, test_dir: Path, data_dir: Path,
 
     command.append(str(config["path"]))
 
+    # Debugging: Print command before execution
     print("Executing command:", " ".join(command))
 
+    # Run the command using subby
     p = subby.cmd(command, shell=True, raise_on_error=False)
 
+    # Determine expected failure logic
     expected_to_fail = config.get("fail", False)
-    actual_failed = p.returncode != 0
+    actual_failed = p.returncode != 0  # Test actually failed
     rc = p.returncode
-    expected_rc = config.get("returnCodes", 0)
-
+    expected_rc = config["returnCodes"]
+    
     if expected_to_fail:
         if actual_failed:
             print(f"Test '{config['path']}' was expected to fail and did — PASS")
-            return Result.PASS
+            return Result.PASS  # Expected failure happened, so it's a pass
         else:
             print(f"ERROR: Test '{config['path']}' was expected to fail but passed!")
-            return Result.FAIL
+            return Result.FAIL  # Unexpected pass when it should've failed
     else:
-        if expected_rc != "*" and rc != expected_rc:
+        if expected_rc ==  "*":
+            pass
+        elif rc != expected_rc:
             print(f"ERROR: Test '{config['path']}' failed with different return code.")
-            return Result.FAIL
+            return Result.FAIL  # Test wasn't expected to fail, so it's a failure
         elif actual_failed:
             print(f"ERROR: Test '{config['path']}' failed unexpectedly.")
-            return Result.FAIL
+            return Result.FAIL  # Test wasn't expected to fail, so it's a failure
 
-    # Check outputs
+    # Check output validity only if the test passed
     invalid = []
     try:
         output = json.loads(p.output)
@@ -105,47 +124,26 @@ def run_test(config: dict, miniwdl_path: Path, test_dir: Path, data_dir: Path,
         return Result.FAIL
 
     outputs = output.get("outputs", {})
-    actual_output_dir = output_dir or (test_dir / "out")
-
-    def normalize_output(val, base_dir):
-        """
-        Convert a MiniWDL output value to a path relative to base_dir,
-        recursively listing directory contents if it's a directory.
-        """
-        base_dir = base_dir.resolve()  # make base_dir absolute
-        if isinstance(val, str):
-            path_obj = Path(val).resolve()  # make val absolute
-            if path_obj.is_dir():
-                # List all files inside directory, relative to base_dir
-                return sorted(str(f.relative_to(base_dir)) for f in path_obj.rglob("*") if f.is_file())
-            else:
-                try:
-                    return str(path_obj.relative_to(base_dir))
-                except ValueError:
-                    # fallback: return absolute path if not relative
-                    return str(path_obj)
-        elif isinstance(val, list):
-            return [normalize_output(v, base_dir) for v in val]
-        else:
-            return val
-
-
     for key, value in outputs.items():
-        if key in config.get("exclude_output", []):
-            continue
-        expected_value = config["output"].get(key)
-        if expected_value is None:
-            invalid.append((key, value, None))
-            continue
+        if key not in config["exclude_output"]:
+            if key not in config["output"]:
+                invalid.append((key, value, None))
+            else:
+                expected_value = config["output"][key]
+                # Function to extract filename if the value is a valid path
+                def get_filename_if_path(val):
+                    """Return the filename if val is a valid path, otherwise return val."""
+                    if isinstance(val, str):  # Only process string values
+                        path_obj = Path(val)
+                        return path_obj.name if path_obj.exists() else val
+                    return val  # Return as-is if not a string
 
-        value_norm = normalize_output(value, actual_output_dir)
-
-        if isinstance(value_norm, list) and isinstance(expected_value, list):
-            if value_norm != expected_value:
-                invalid.append((key, value_norm, expected_value))
-        else:
-            if value_norm != expected_value:
-                invalid.append((key, value_norm, expected_value))
+                # Extract filenames only for valid path-like strings
+                value_name = get_filename_if_path(value)
+                expected_name = get_filename_if_path(expected_value)
+                
+                if value_name != expected_name:
+                    invalid.append((key, value, expected_value))
 
     if invalid:
         title = f"{config['path']}: ERROR"
@@ -157,6 +155,8 @@ def run_test(config: dict, miniwdl_path: Path, test_dir: Path, data_dir: Path,
         return Result.FAIL
 
     return Result.PASS
+
+
 
 
 def main():
@@ -177,33 +177,46 @@ def main():
     test_dir = args.test_dir
     data_dir = args.data_dir or test_dir / "data"
     test_config = args.test_config or test_dir / "test_config.json"
-
-    with open(test_config, "r") as f:
-        configs = json.load(f)
+    with open(test_config, "r") as i:
+        configs = json.load(i)
     if args.num_tests is not None:
         configs = configs[: args.num_tests]
-
     results = defaultdict(int)
-    failed_tests = []
-
+    failed_tests = []  # Store failed test paths
     for config in configs:
         if args.check_only:
-            result = check(config, miniwdl_path, test_dir, args.strict, args.no_warn, args.deprecated_optional)
+            result = check(
+                config,
+                miniwdl_path,
+                test_dir,
+                args.strict,
+                args.no_warn,
+                args.deprecated_optional,
+            )
+            results[result] += 1
         else:
-            result = run_test(config, miniwdl_path, test_dir, data_dir, args.output_dir, args.no_warn, args.deprecated_optional)
+            result = run_test(
+                config,
+                miniwdl_path,
+                test_dir,
+                data_dir,
+                args.output_dir,
+                args.no_warn,
+                args.deprecated_optional,
+            )
+            results[result] += 1
             if result == Result.FAIL:
-                failed_tests.append(config["path"])
-        results[result] += 1
+                failed_tests.append(config["path"])  # Store failing test path
 
-    # Save failed tests
+    # Save failed tests to a file
     if failed_tests:
         failed_tests_file = test_dir / "failed_tests.txt"
         with open(failed_tests_file, "w") as f:
             for test in failed_tests:
                 f.write(f"{test}\n")
+
         print(f"\nFailed tests written to: {failed_tests_file}")
 
-    # Print summary
     print(f"Total tests: {sum(results.values())}")
     print(f"Passed: {results.get(Result.PASS, 0)}")
     print(f"Warnings: {results.get(Result.WARN, 0)}")
