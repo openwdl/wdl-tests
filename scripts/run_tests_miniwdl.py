@@ -108,43 +108,27 @@ def run_test(config: dict, miniwdl_path: Path, test_dir: Path, data_dir: Path,
     actual_output_dir = output_dir or (test_dir / "out")
 
     def normalize_output(val, base_dir):
-    """
-    Convert a MiniWDL output value to a path relative to base_dir,
-    recursively listing directory contents if it's a directory.
-    """
-    base_dir = base_dir.resolve()  # make base_dir absolute
-    if isinstance(val, str):
-        path_obj = Path(val).resolve()  # make val absolute
-        if path_obj.is_dir():
-            # List all files inside directory, relative to base_dir
-            return sorted(str(f.relative_to(base_dir)) for f in path_obj.rglob("*") if f.is_file())
-        else:
-            try:
-                return str(path_obj.relative_to(base_dir))
-            except ValueError:
-                # fallback: return absolute path if not relative
-                return str(path_obj)
-    elif isinstance(val, list):
-        return [normalize_output(v, base_dir) for v in val]
-    else:
-        return val
         """
         Convert a MiniWDL output value to a path relative to base_dir,
         recursively listing directory contents if it's a directory.
         """
+        base_dir = base_dir.resolve()  # make base_dir absolute
         if isinstance(val, str):
-            path_obj = Path(val)
+            path_obj = Path(val).resolve()  # make val absolute
             if path_obj.is_dir():
+                # List all files inside directory, relative to base_dir
                 return sorted(str(f.relative_to(base_dir)) for f in path_obj.rglob("*") if f.is_file())
             else:
                 try:
                     return str(path_obj.relative_to(base_dir))
                 except ValueError:
+                    # fallback: return absolute path if not relative
                     return str(path_obj)
         elif isinstance(val, list):
             return [normalize_output(v, base_dir) for v in val]
         else:
             return val
+
 
     for key, value in outputs.items():
         if key in config.get("exclude_output", []):
