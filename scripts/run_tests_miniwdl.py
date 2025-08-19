@@ -75,7 +75,7 @@ def run_test(
 
     input_json = json.dumps(config["input"])
     
-    # Ensure "run" command is included
+    # Build MiniWDL run command
     command = [str(miniwdl_path), "run", "-p", str(test_dir), "-i", input_json]
 
     if output_dir is not None:
@@ -94,26 +94,24 @@ def run_test(
 
     # Determine expected failure logic
     expected_to_fail = config.get("fail", False)
-    actual_failed = p.returncode != 0  # Test actually failed
+    actual_failed = p.returncode != 0
     rc = p.returncode
     expected_rc = config["returnCodes"]
     
     if expected_to_fail:
         if actual_failed:
             print(f"Test '{config['path']}' was expected to fail and did — PASS")
-            return Result.PASS  # Expected failure happened, so it's a pass
+            return Result.PASS
         else:
             print(f"ERROR: Test '{config['path']}' was expected to fail but passed!")
-            return Result.FAIL  # Unexpected pass when it should've failed
+            return Result.FAIL
     else:
-        if expected_rc ==  "*":
-            pass
-        elif rc != expected_rc:
+        if expected_rc != "*" and rc != expected_rc:
             print(f"ERROR: Test '{config['path']}' failed with different return code.")
-            return Result.FAIL  # Test wasn't expected to fail, so it's a failure
+            return Result.FAIL
         elif actual_failed:
             print(f"ERROR: Test '{config['path']}' failed unexpectedly.")
-            return Result.FAIL  # Test wasn't expected to fail, so it's a failure
+            return Result.FAIL
 
     # Check output validity only if the test passed
     invalid = []
@@ -124,26 +122,30 @@ def run_test(
         return Result.FAIL
 
     outputs = output.get("outputs", {})
+    actual_output_dir = output_dir or (test_dir / "out")
+
     for key, value in outputs.items():
         if key not in config["exclude_output"]:
             if key not in config["output"]:
                 invalid.append((key, value, None))
             else:
                 expected_value = config["output"][key]
-                # Function to extract filename if the value is a valid path
-                def get_filename_if_path(val):
-                    """Return the filename if val is a valid path, otherwise return val."""
-                    if isinstance(val, str):  # Only process string values
-                        path_obj = Path(val)
-                        return path_obj.name if path_obj.exists() else val
-                    return val  # Return as-is if not a string
 
-                # Extract filenames only for valid path-like strings
-                value_name = get_filename_if_path(value)
-                expected_name = get_filename_if_path(expected_value)
-                
-                if value_name != expected_name:
-                    invalid.append((key, value, expected_value))
+                def get_relative_path(val, base_dir):
+                    """Return path relative to base_dir if it exists under it, else return val."""
+                    if isinstance(val, str):
+                        path_obj = Path(val)
+                        try:
+                            return str(path_obj.relative_to(base_dir))
+                        except ValueError:
+                            return val
+                    return val
+
+                value_rel = get_relative_path(value, actual_output_dir)
+                expected_rel = expected_value
+
+                if value_rel != expected_rel:
+                    invalid.append((key, value_rel, expected_rel))
 
     if invalid:
         title = f"{config['path']}: ERROR"
@@ -155,8 +157,6 @@ def run_test(
         return Result.FAIL
 
     return Result.PASS
-
-
 
 
 def main():
@@ -182,7 +182,7 @@ def main():
     if args.num_tests is not None:
         configs = configs[: args.num_tests]
     results = defaultdict(int)
-    failed_tests = []  # Store failed test paths
+    failed_tests = []
     for config in configs:
         if args.check_only:
             result = check(
@@ -206,7 +206,7 @@ def main():
             )
             results[result] += 1
             if result == Result.FAIL:
-                failed_tests.append(config["path"])  # Store failing test path
+                failed_tests.append(config["path"])
 
     # Save failed tests to a file
     if failed_tests:
@@ -214,7 +214,6 @@ def main():
         with open(failed_tests_file, "w") as f:
             for test in failed_tests:
                 f.write(f"{test}\n")
-
         print(f"\nFailed tests written to: {failed_tests_file}")
 
     print(f"Total tests: {sum(results.values())}")
