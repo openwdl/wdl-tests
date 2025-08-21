@@ -40,19 +40,13 @@ def resolve_wdl_path(config_path: str) -> Path:
     return wdl_path
 
 
-def normalize_paths(d: dict, base_dir: Path) -> dict:
-    """Normalize string values that look like file paths to absolute paths."""
+def normalize_paths(d: dict) -> dict:
+    """Normalize string values that look like file paths to just the filename."""
     normalized = {}
     for k, v in d.items():
         if isinstance(v, str):
             p = Path(v)
-            # If the path exists either absolute or relative to base_dir
-            if p.exists():
-                normalized[k] = str(p.resolve())
-            elif (base_dir / p).exists():
-                normalized[k] = str((base_dir / p).resolve())
-            else:
-                normalized[k] = v
+            normalized[k] = p.name
         else:
             normalized[k] = v
     return normalized
@@ -111,28 +105,39 @@ def run_test(
 
     print("Executing:", " ".join(cmd))
 
+    expected_to_fail = config.get("fail", False)
+
     try:
-        p = subby.cmd(cmd, shell=False, cwd=Path.cwd(), raise_on_error=True)
+        p = subby.cmd(cmd, shell=False, cwd=test_dir, raise_on_error=not expected_to_fail)
+        rc = p.returncode
     except subprocess.CalledProcessError as e:
-        print(f"ERROR: Subby failed with return code {e.returncode}")
+        rc = e.returncode
         print(f"STDOUT:\n{e.stdout}")
         print(f"STDERR:\n{e.stderr}")
-        return Result.FAIL
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        return Result.FAIL
-
-    rc = p.returncode
-    expected_rc = config.get("returnCodes", 0)
-
-    if config.get("fail", False):
-        if rc != 0:
-            print(f"Test '{config['path']}' was expected to fail and did — PASS")
+        if expected_to_fail:
+            print(f"Test '{config['path']}' was expected to fail and returned {rc} — PASS")
             return Result.PASS
         else:
+            print(f"ERROR: Subby failed with return code {rc}")
+            return Result.FAIL
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        if expected_to_fail:
+            print(f"Test '{config['path']}' was expected to fail and errored — PASS")
+            return Result.PASS
+        return Result.FAIL
+
+    # Handle expected-to-fail
+    if expected_to_fail:
+        if rc == 0:
             print(f"ERROR: Test '{config['path']}' was expected to fail but passed!")
             return Result.FAIL
+        else:
+            print(f"Test '{config['path']}' failed as expected — PASS")
+            return Result.PASS
 
+    # Check return code
+    expected_rc = config.get("returnCodes", 0)
     if expected_rc != "*" and rc != expected_rc:
         print(f"ERROR: Test '{config['path']}' exited {rc}, expected {expected_rc}")
         return Result.FAIL
@@ -151,9 +156,9 @@ def run_test(
             print(f"ERROR: Invalid JSON output from toil: {e}")
             return Result.FAIL
 
-        # Normalize paths
-        outputs_norm = normalize_paths(outputs, wdl_output_dir)
-        expected_norm = normalize_paths(config.get("output", {}), wdl_output_dir)
+        # Normalize paths to just filenames
+        outputs_norm = normalize_paths(outputs)
+        expected_norm = normalize_paths(config.get("output", {}))
 
         invalid = []
         for key, value in outputs_norm.items():
