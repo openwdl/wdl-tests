@@ -55,6 +55,22 @@ def get_filename_if_path(val):
         return path_obj.name if path_obj.exists() else val
     return val  # Return as-is if not a string
 
+def adjust_inputs(config: dict) -> dict:
+    """
+    Adjust inputs depending on whether this is a workflow or task.
+    Cromwell requires un-namespaced inputs for task-only WDLs.
+    """
+    inputs = config.get("input", {})
+    if config.get("type") == "task":
+        adjusted = {}
+        for k, v in inputs.items():
+            if "." in k:
+                adjusted[k.split(".", 1)[1]] = v  # strip task prefix
+            else:
+                adjusted[k] = v
+        return adjusted
+    return inputs
+
 # ------------------ Core test runner ------------------
 
 def run_test(
@@ -69,10 +85,11 @@ def run_test(
     if config.get("priority") == "ignore":
         return Result.IGNORE
 
-    # Prepare inputs JSON
+    # Prepare inputs JSON (adjust for task-only if needed)
+    inputs = adjust_inputs(config)
     input_file = test_dir / "inputs.json"
     with open(input_file, "w") as f:
-        json.dump(config.get("input", {}), f, indent=2)
+        json.dump(inputs, f, indent=2)
 
     # Output directory
     run_dir = output_dir or (test_dir / "cromwell_results")
