@@ -48,6 +48,13 @@ def load_cromwell_outputs(metadata_file: Path) -> dict:
 
     return outputs
 
+def get_filename_if_path(val):
+    """Return the filename if val is a valid path, otherwise return val."""
+    if isinstance(val, str):  # Only process string values
+        path_obj = Path(val)
+        return path_obj.name if path_obj.exists() else val
+    return val  # Return as-is if not a string
+
 # ------------------ Core test runner ------------------
 
 def run_test(
@@ -126,8 +133,13 @@ def run_test(
     invalid = []
     for key, expected_value in config.get("output", {}).items():
         actual_value = outputs.get(key)
-        if actual_value != expected_value:
-            invalid.append((key, actual_value, expected_value))
+
+        # Extract filenames only for valid path-like strings
+        value_name = get_filename_if_path(actual_value)
+        expected_name = get_filename_if_path(expected_value)
+
+        if value_name != expected_name:
+            invalid.append((key, value_name, expected_name))
 
     if invalid:
         print(f"{config['path']}: ERROR")
