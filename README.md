@@ -2,6 +2,8 @@
 
 Test cases and tools for testing WDL implementations.
 
+> ⚠️ **Deprecation Notice**: This repository is deprecated. For WDL 1.1.3 and later, please use [**spectool**](https://github.com/openwdl/spectool) instead. Spectool provides improved test extraction, validation, and execution capabilities for WDL specification examples and tests. See the [spectool documentation](https://github.com/openwdl/spectool) for migration guidance.
+
 ## Specification Tests
 
 Starting with [WDL 1.1.1](https://github.com/openwdl/wdl/tree/wdl-1.1), nearly all the examples in the WDL specification are also test cases that conform to the [WDL markdown test specification](docs/MarkdownTests.md).
